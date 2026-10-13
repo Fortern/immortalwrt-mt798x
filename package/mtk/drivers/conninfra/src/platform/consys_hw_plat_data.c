@@ -7,6 +7,7 @@
 ********************************************************************************
 */
 #include <linux/of_device.h>
+#include <linux/mod_devicetable.h>
 
 #include "consys_hw.h"
 

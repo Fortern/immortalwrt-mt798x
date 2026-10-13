@@ -429,6 +429,17 @@ static NDIS_STATUS rtmp_ee_flash_init(PRTMP_ADAPTER pAd, PUCHAR start)
 	cap->ee_inited = 1;
 
 	if (validFlashEepromID(pAd) == FALSE) {
+#if defined(MT7981)
+		/* MT7981 must use the device's Factory calibration. A generic
+		 * EEPROM image cannot replace board-specific RF calibration.
+		 */
+		if (IS_MT7981(pAd)) {
+			MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Invalid Factory EEPROM; refusing generic calibration fallback\n");
+			cap->ee_inited = 0;
+			return NDIS_STATUS_FAILURE;
+		}
+#endif
 		if (rtmp_ee_flash_reset(pAd, start) != NDIS_STATUS_SUCCESS) {
 			MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "rtmp_ee_init(): rtmp_ee_flash_init() failed\n");
 			return NDIS_STATUS_FAILURE;

@@ -58,7 +58,7 @@ struct spi_op {
 *                              C O N S T A N T S
 ********************************************************************************
 */
-const static char* g_spi_system_name[SYS_SPI_MAX] = {
+static const char* g_spi_system_name[SYS_SPI_MAX] = {
 	"SYS_SPI_WF1",
 	"SYS_SPI_WF",
 	"SYS_SPI_BT",
@@ -116,7 +116,7 @@ static const struct spi_op spi_op_array[SYS_SPI_MAX] = {
 *                  F U N C T I O N   D E C L A R A T I O N S
 ********************************************************************************
 */
-bool _is_flash_content_valid(void)
+static bool __maybe_unused _is_flash_content_valid(void)
 {
 	unsigned short eeFlashId = 0;
 
@@ -128,7 +128,7 @@ bool _is_flash_content_valid(void)
 		return false;
 }
 
-int _consys_check_adie_cfg(void)
+static int _consys_check_adie_cfg(void)
 {
 	int ret = 0;
 	unsigned int hw_adie_type = 0;
@@ -286,7 +286,7 @@ int consys_tx_rx_bus_slp_prot_ctrl(bool enable)
 	return 0;
 }
 
-int _consys_polling_chipid_int(unsigned int retry, unsigned int sleep_ms)
+static int _consys_polling_chipid_int(unsigned int retry, unsigned int sleep_ms)
 {
 	unsigned int count = retry + 1;
 	unsigned int consys_hw_ver = consys_get_hw_ver();
@@ -877,7 +877,7 @@ static int _connsys_a_die_sw_cntl(enum sys_spi_subsystem subsystem, unsigned cha
 	return 0;
 }
 
-int _connsys_a_die_cfg_7976(unsigned char adie_idx)
+static int _connsys_a_die_cfg_7976(unsigned char adie_idx)
 {
 	int check;
 	unsigned int adie_chip_id = 0x0;
@@ -1068,7 +1068,7 @@ static int _connsys_a_die_form_patch_7975(enum sys_spi_subsystem subsystem)
 	return 0;
 }
 
-int _connsys_a_die_cfg_7975(unsigned char adie_idx)
+static int _connsys_a_die_cfg_7975(unsigned char adie_idx)
 {
 	int check;
 	unsigned int adie_chip_id = 0x0;
@@ -1157,7 +1157,7 @@ int connsys_a_die_cfg(void)
 	return ret;
 }
 
-int _connsys_afe_wbg_cal_7976(unsigned char wbg_idx, unsigned char rfspi_idx)
+static int _connsys_afe_wbg_cal_7976(unsigned char wbg_idx, unsigned char rfspi_idx)
 {
 	int check;
 	unsigned long afe_ctl_addr = 0;
@@ -1211,7 +1211,7 @@ int _connsys_afe_wbg_cal_7976(unsigned char wbg_idx, unsigned char rfspi_idx)
 	return 0;
 }
 
-int _connsys_afe_wbg_cal_7975(unsigned char wbg_idx, unsigned char rfspi_idx)
+static int _connsys_afe_wbg_cal_7975(unsigned char wbg_idx, unsigned char rfspi_idx)
 {
 	int check;
 	unsigned long afe_ctl_addr = 0;
@@ -1293,7 +1293,7 @@ int connsys_afe_wbg_cal(void)
 	return ret;
 }
 
-int _connsys_subsys_pll_initial(unsigned char wbg_idx)
+static int _connsys_subsys_pll_initial(unsigned char wbg_idx)
 {
 	unsigned long afe_ctl_addr = 0;
 
@@ -1431,7 +1431,7 @@ int consys_conninfra_top_sleep(void)
 	return 0;
 }
 
-int _consys_adie_top_ck_en_on_off_ctrl(unsigned char rfspi_idx, enum consys_drv_type type, unsigned char on)
+static int _consys_adie_top_ck_en_on_off_ctrl(unsigned char rfspi_idx, enum consys_drv_type type, unsigned char on)
 {
 	int check = 0;
 	unsigned long slp_ctl_addr = 0;
@@ -1644,7 +1644,7 @@ int consys_wmcpu_idle_loop_check(void)
 	return 0;
 }
 
-void _consys_check_sku_cfg(void)
+static void _consys_check_sku_cfg(void)
 {
 	unsigned int hw_sku_type = 0;
 

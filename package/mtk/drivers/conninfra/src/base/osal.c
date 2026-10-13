@@ -82,7 +82,7 @@ int ftrace_flag = 1;
 */
 
 
-int get_default_bin_image_file(char *path)
+static int __maybe_unused get_default_bin_image_file(char *path)
 {
 	if(osal_strlen(BIN_TO_STR(EEPROM_NAME)))
 		osal_sprintf(path, "/lib/firmware/%s", BIN_TO_STR(EEPROM_NAME));
@@ -717,7 +717,7 @@ int osal_test_and_set_bit(unsigned int bitOffset, P_OSAL_BIT_OP_VAR pData)
 	return iRet;
 }
 
-int _osal_fifo_init(OSAL_FIFO *pFifo, unsigned char *buf, unsigned int size)
+static int _osal_fifo_init(OSAL_FIFO *pFifo, unsigned char *buf, unsigned int size)
 {
 	struct kfifo *fifo = NULL;
 	int ret = -1;
@@ -751,7 +751,7 @@ int _osal_fifo_init(OSAL_FIFO *pFifo, unsigned char *buf, unsigned int size)
 	return (ret < 0) ? (-1) : (0);
 }
 
-int _osal_fifo_deinit(OSAL_FIFO *pFifo)
+static int _osal_fifo_deinit(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 
@@ -769,7 +769,7 @@ int _osal_fifo_deinit(OSAL_FIFO *pFifo)
 	return 0;
 }
 
-int _osal_fifo_size(OSAL_FIFO *pFifo)
+static int _osal_fifo_size(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -789,7 +789,7 @@ int _osal_fifo_size(OSAL_FIFO *pFifo)
 }
 
 /*returns unused bytes in fifo*/
-int _osal_fifo_avail_size(OSAL_FIFO *pFifo)
+static int _osal_fifo_avail_size(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -809,7 +809,7 @@ int _osal_fifo_avail_size(OSAL_FIFO *pFifo)
 }
 
 /*returns used bytes in fifo*/
-int _osal_fifo_len(OSAL_FIFO *pFifo)
+static int _osal_fifo_len(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -828,7 +828,7 @@ int _osal_fifo_len(OSAL_FIFO *pFifo)
 	return ret;
 }
 
-int _osal_fifo_is_empty(OSAL_FIFO *pFifo)
+static int _osal_fifo_is_empty(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -847,7 +847,7 @@ int _osal_fifo_is_empty(OSAL_FIFO *pFifo)
 	return ret;
 }
 
-int _osal_fifo_is_full(OSAL_FIFO *pFifo)
+static int _osal_fifo_is_full(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -866,7 +866,7 @@ int _osal_fifo_is_full(OSAL_FIFO *pFifo)
 	return ret;
 }
 
-int _osal_fifo_data_in(OSAL_FIFO *pFifo, const void *buf, unsigned int len)
+static int _osal_fifo_data_in(OSAL_FIFO *pFifo, const void *buf, unsigned int len)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -891,7 +891,7 @@ int _osal_fifo_data_in(OSAL_FIFO *pFifo, const void *buf, unsigned int len)
 	return ret;
 }
 
-int _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, unsigned int len)
+static int _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, unsigned int len)
 {
 	struct kfifo *fifo = NULL;
 	int ret = 0;
@@ -916,7 +916,7 @@ int _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, unsigned int len)
 	return ret;
 }
 
-int _osal_fifo_reset(OSAL_FIFO *pFifo)
+static int _osal_fifo_reset(OSAL_FIFO *pFifo)
 {
 	struct kfifo *fifo = NULL;
 

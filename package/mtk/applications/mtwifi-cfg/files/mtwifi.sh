@@ -18,7 +18,7 @@ detect_mtwifi() {
 				if [ $idx -eq 1 ]; then
 					band="2g"
 					hwmode="11g"
-					htmode="HE40"
+					htmode="HE20"
 					htbsscoex="1"
 					ssid="ImmortalWrt-2.4G"
 					dbdc_main="1"
@@ -27,7 +27,7 @@ detect_mtwifi() {
 				else
 					band="5g"
 					hwmode="11a"
-					htmode="HE160"
+					htmode="HE80"
 					htbsscoex="0"
 					ssid="ImmortalWrt-5G"
 					channel="36"
@@ -44,7 +44,7 @@ detect_mtwifi() {
 					set wireless.${dev}.channel=${channel}
 					set wireless.${dev}.txpower=${txpower}
 					set wireless.${dev}.htmode=${htmode}
-					set wireless.${dev}.country=CN
+					set wireless.${dev}.disabled=1
 					set wireless.${dev}.mu_beamformer=1
 					set wireless.${dev}.noscan=${htbsscoex}
 					set wireless.${dev}.wapp=0

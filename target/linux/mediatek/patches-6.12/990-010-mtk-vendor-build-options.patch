@@ -1,0 +1,66 @@
+diff --git a/drivers/net/ethernet/mediatek/Kconfig b/drivers/net/ethernet/mediatek/Kconfig
+index 6f35d4f..f7ccb76 100644
+--- a/drivers/net/ethernet/mediatek/Kconfig
++++ b/drivers/net/ethernet/mediatek/Kconfig
+@@ -8,6 +8,7 @@ config NET_VENDOR_MEDIATEK
+ if NET_VENDOR_MEDIATEK
+ 
+ config NET_MEDIATEK_SOC_WED
++	depends on NET_MEDIATEK_HNAT = n
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
+ 	def_bool NET_MEDIATEK_SOC != n
+ 
+@@ -32,4 +33,15 @@ config NET_MEDIATEK_STAR_EMAC
+ 	  This driver supports the ethernet MAC IP first used on
+ 	  MediaTek MT85** SoCs.
+ 
++config NET_MEDIATEK_HNAT
++	tristate "MediaTek vendor HNAT for MT7981"
++	depends on ARCH_MEDIATEK && NET_MEDIATEK_SOC && NF_CONNTRACK && NF_NAT
++	help
++	  Vendor packet engine backend required by the MT7981 mt_wifi/warp
++	  stack. Do not enable alongside upstream WED/PPE hardware offload.
++
++config MEDIATEK_NETSYS_V2
++	bool
++	default y if NET_MEDIATEK_HNAT
++
+ endif #NET_VENDOR_MEDIATEK
+diff --git a/drivers/net/ethernet/mediatek/Makefile b/drivers/net/ethernet/mediatek/Makefile
+index 03e008f..e12864c 100644
+--- a/drivers/net/ethernet/mediatek/Makefile
++++ b/drivers/net/ethernet/mediatek/Makefile
+@@ -11,3 +11,5 @@ mtk_eth-$(CONFIG_NET_MEDIATEK_SOC_WED) += mtk_wed_debugfs.o
+ endif
+ obj-$(CONFIG_NET_MEDIATEK_SOC_WED) += mtk_wed_ops.o
+ obj-$(CONFIG_NET_MEDIATEK_STAR_EMAC) += mtk_star_emac.o
++
++obj-$(CONFIG_NET_MEDIATEK_HNAT) += mtk_hnat/
+diff --git a/drivers/net/wireless/Kconfig b/drivers/net/wireless/Kconfig
+index c659959..e18d959 100644
+--- a/drivers/net/wireless/Kconfig
++++ b/drivers/net/wireless/Kconfig
+@@ -40,3 +40,13 @@ source "drivers/net/wireless/quantenna/Kconfig"
+ source "drivers/net/wireless/virtual/Kconfig"
+ 
+ endif # WLAN
++
++config MTK_VENDOR_WIFI_UTILITY
++	bool "MediaTek vendor wireless bus and calibration helpers"
++	depends on ARCH_MEDIATEK && PCI && MTD
++	select WIRELESS_EXT
++	select WEXT_PRIV
++	select WEXT_SPY
++	help
++	  PCI-style platform bus and MTD helpers for the MT7981 vendor
++	  wireless driver. Device-tree matching controls bus registration.
+diff --git a/drivers/net/wireless/Makefile b/drivers/net/wireless/Makefile
+index e1c4141..390396c 100644
+--- a/drivers/net/wireless/Makefile
++++ b/drivers/net/wireless/Makefile
+@@ -23,3 +23,5 @@ obj-$(CONFIG_WLAN_VENDOR_TI) += ti/
+ obj-$(CONFIG_WLAN_VENDOR_ZYDAS) += zydas/
+ 
+ obj-$(CONFIG_WLAN) += virtual/
++
++obj-$(CONFIG_MTK_VENDOR_WIFI_UTILITY) += wifi_utility/

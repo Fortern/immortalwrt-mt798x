@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+
+/* Keep model, compatibility, storage and Ethernet definitions from the release. */
+#include "mt7981b-cudy-tr3000-256mb-v1.dts"
+#include <dt-bindings/reset/ti-syscon.h>
+
+/ {
+	soc {
+		consys: consys@10000000 {
+			compatible = "mediatek,mt7981-consys";
+			reg = <0 0x10000000 0 0x8600000>;
+			clocks = <&topckgen CLK_TOP_NETSYS_MCU_SEL>,
+				 <&topckgen CLK_TOP_AP2CNN_HOST_SEL>;
+			clock-names = "mcu", "ap2conn";
+			memory-region = <&wmcpu_emi>;
+		};
+
+		hnat: hnat@15100000 {
+			compatible = "mediatek,mtk-hnat_v4";
+			reg = <0 0x15100000 0 0x80000>;
+			/* Preserve the release's eth1 LAN / eth0 WAN assignment. */
+			mtketh-wan = "eth0";
+			mtketh-lan = "eth1";
+			mtketh-max-gmac = <2>;
+			mtketh-ppe-num = <2>;
+			ext-devices-prefix = "usb", "wwan", "rmnet", "eth2", "eth3", "eth4";
+		};
+	};
+};
+
+&wo_emi0 {
+	compatible = "mediatek,wocpu0_emi";
+	shared = <0>;
+};
+
+&wo_data {
+	compatible = "mediatek,wocpu_data";
+	shared = <1>;
+};
+
+&ethsys {
+	ethsysrst: reset-controller {
+		compatible = "ti,syscon-reset";
+		#reset-cells = <1>;
+		ti,reset-bits = <0x34 4 0x34 4 0x34 4
+			(ASSERT_SET | DEASSERT_CLEAR | STATUS_SET)>;
+	};
+};
+
+&eth {
+	/delete-property/ mediatek,wed;
+};
+
+&wed {
+	compatible = "mediatek,wed";
+	wed_num = <2>;
+	pci_slot_map = <0>, <1>;
+	reg = <0 0x15010000 0 0x1000>, <0 0x15011000 0 0x1000>;
+	interrupts = <GIC_SPI 205 IRQ_TYPE_LEVEL_HIGH>,
+		     <GIC_SPI 206 IRQ_TYPE_LEVEL_HIGH>;
+	/delete-property/ mediatek,wo-ccif;
+	/delete-property/ mediatek,wo-ilm;
+	/delete-property/ mediatek,wo-dlm;
+	/delete-property/ mediatek,wo-cpuboot;
+};
+
+&wo_ilm0 {
+	compatible = "mediatek,wocpu0_ilm";
+};
+
+&wo_dlm0 {
+	compatible = "mediatek,wocpu_dlm";
+	reg = <0 0x151e8000 0 0x2000>, <0 0x151f8000 0 0x2000>;
+	resets = <&ethsysrst 0>;
+	reset-names = "wocpu_rst";
+};
+
+&wo_cpuboot {
+	compatible = "mediatek,wocpu_boot";
+};
+
+/* Reuse the single radio resource node, with a mutually exclusive binding. */
+&wifi {
+	compatible = "mediatek,wbsys";
+	reg = <0 0x18000000 0 0x1000000>;
+	chip_id = <0x7981>;
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
+	/delete-property/ resets;
+	/delete-property/ reset-names;
+	/delete-property/ memory-region;
+	/delete-property/ nvmem-cells;
+	/delete-property/ nvmem-cell-names;
+};

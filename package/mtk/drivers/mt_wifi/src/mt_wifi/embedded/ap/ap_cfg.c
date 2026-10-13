@@ -9539,7 +9539,7 @@ INT RTMPAPQueryInformation(
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	RTMP_STRING driverVersion[16];
 	UCHAR apidx = pObj->ioctl_if;
-#ifdef CONFIG_MAP_SUPPORT
+#if defined(CONFIG_MAP_SUPPORT) || defined(QOS_R2)
 	PUCHAR pStaMacAddr = NULL;
 #endif
 #ifdef WSC_AP_SUPPORT

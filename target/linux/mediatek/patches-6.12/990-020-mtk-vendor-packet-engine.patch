@@ -1,0 +1,125 @@
+diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+index b052324..01eb83f 100644
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -37,6 +37,14 @@
+ #include "mtk_eth_soc.h"
+ #include "mtk_wed.h"
+ 
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++#include "mtk_hnat/nf_hnat_mtk.h"
++struct net_device *ppd_dev;
++EXPORT_SYMBOL(ppd_dev);
++atomic_t eth1_in_br = ATOMIC_INIT(0);
++EXPORT_SYMBOL(eth1_in_br);
++#endif
++
+ static int mtk_msg_level = -1;
+ module_param_named(msg_level, mtk_msg_level, int, 0);
+ MODULE_PARM_DESC(msg_level, "Message level (-1=defaults,0=none,...,16=all)");
+@@ -1549,6 +1557,8 @@ static void mtk_tx_set_dma_desc_v2(struct net_device *dev, void *txd,
+ 		break;
+ 	}
+ 
++	if (info->vendor_ppe)
++		data = PSE_PPE0_PORT << TX_DMA_FPORT_SHIFT_V2;
+ 	data |= TX_DMA_SWC_V2 | QID_BITS_V2(info->qid);
+ 	WRITE_ONCE(desc->txd4, data);
+ 
+@@ -1701,6 +1711,9 @@ static int mtk_tx_map(struct sk_buff *skb, struct net_device *dev,
+ 
+ next:
+ 	txd_info = (struct mtk_tx_dma_desc_info){
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++		.vendor_ppe = HNAT_SKB_CB2(skb)->magic == 0x78681415,
++#endif
+ 		.gso = gso,
+ 		.qid = queue,
+ 		.csum = cur_skb->ip_summed == CHECKSUM_PARTIAL || gso,
+@@ -2416,6 +2429,9 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
+ 		struct net_device *netdev;
+ 		u32 hash, reason;
+ 		int mac = 0;
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++		bool vendor_forward = false;
++#endif
+ 
+ 		ring = mtk_get_rx_ring(eth);
+ 		if (unlikely(!ring))
+@@ -2448,6 +2464,16 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
+ 			mac = RX_DMA_GET_SPORT(trxd.rxd4) - 1;
+ 		}
+ 
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++		if (mtk_is_netsys_v2_or_greater(eth) &&
++		    !mtk_is_netsys_v3_or_greater(eth) &&
++		    (mac == 4 || FIELD_GET(MTK_RXD4_PPE_CPU_REASON, trxd.rxd4) ==
++				 HIT_BIND_FORCE_TO_CPU)) {
++			mac = atomic_read(&eth1_in_br);
++			vendor_forward = true;
++		}
++#endif
++
+ 		if (unlikely(mac < 0 || mac >= MTK_MAX_DEVS ||
+ 			     !eth->netdev[mac]))
+ 			goto release_desc;
+@@ -2576,8 +2602,28 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
+ 				skb_dst_set_noref(skb, &eth->dsa_meta[port]->dst);
+ 		}
+ 
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++		/* The vendor RX ABI stores descriptor metadata in reserved headroom. */
++		if (likely(skb_headroom(skb) >= sizeof(struct hnat_desc))) {
++			memset(skb->head, 0, sizeof(struct hnat_desc));
++			*(u32 *)skb->head = trxd.rxd4;
++			skb_hnat_alg(skb) = 0;
++			skb_hnat_filled(skb) = 0;
++			skb_hnat_magic_tag(skb) = HNAT_MAGIC_TAG;
++		}
++		if (vendor_forward) {
++			struct net_device *forward = READ_ONCE(ppd_dev);
++
++			if (forward) {
++				skb->protocol = eth_hdr(skb)->h_proto;
++				skb->dev = forward;
++				skb->pkt_type = PACKET_HOST;
++			}
++		}
++#else
+ 		if (reason == MTK_PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
+ 			mtk_ppe_check_skb(eth->ppe[ppe_idx], skb, hash);
++#endif
+ 
+ 		skb_record_rx_queue(skb, 0);
+ 		napi_gro_receive(napi, skb);
+@@ -5136,7 +5182,9 @@ static const struct net_device_ops mtk_netdev_ops = {
+ #ifdef CONFIG_NET_POLL_CONTROLLER
+ 	.ndo_poll_controller	= mtk_poll_controller,
+ #endif
++#if !IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
+ 	.ndo_setup_tc		= mtk_eth_setup_tc,
++#endif
+ 	.ndo_bpf		= mtk_xdp,
+ 	.ndo_xdp_xmit		= mtk_xdp_xmit,
+ 	.ndo_select_queue	= mtk_select_queue,
+@@ -5683,7 +5731,7 @@ static int mtk_probe(struct platform_device *pdev)
+ 			goto err_free_dev;
+ 	}
+ 
+-	if (eth->soc->offload_version) {
++	if (!IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT) && eth->soc->offload_version) {
+ 		u8 ppe_num = eth->soc->ppe_num;
+ 
+ 		ppe_num = min_t(u8, ARRAY_SIZE(eth->ppe), ppe_num);
+diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.h b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
+index 15b5dd6..6d20064 100644
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
+@@ -1210,6 +1210,7 @@ struct mtk_tx_dma_desc_info {
+ 	u8		vlan:1;
+ 	u8		first:1;
+ 	u8		last:1;
++	u8		vendor_ppe:1;
+ };
+ 
+ struct mtk_reg_map {

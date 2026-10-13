@@ -30,12 +30,9 @@
 #include "hnat.h"
 
 #include "../mtk_eth_soc.h"
-#include "../mtk_eth_reset.h"
 
 extern struct net_device *ppd_dev;
 extern atomic_t eth1_in_br;
-struct net_device *br_dev;
-struct net_device *eth1_dev;
 #define do_ge2ext_fast(dev, skb)                                               \
 	(skb_hnat_is_hashed(skb) && !is_from_extge(skb) && \
 	 skb_hnat_reason(skb) == HIT_BIND_FORCE_TO_CPU)
@@ -51,6 +48,51 @@ struct net_device *eth1_dev;
 static struct ipv6hdr mape_l2w_v6h;
 static struct ipv6hdr mape_w2l_v6h;
 static u16 ext_vlan=0;
+/* Decode supported encapsulation using Linux 6.12's existing traversal.
+ * Unknown paths stay in software, without changing net_device_ops globally.
+ */
+static int hnat_fill_forward_path(struct flow_offload_hw_path *hw,
+				  const struct sk_buff *skb)
+{
+	struct net_device_path_stack stack = {};
+	int i, ret;
+
+	if (!skb_mac_header_was_set(skb))
+		goto unsupported;
+	ether_addr_copy(hw->eth_dest, eth_hdr(skb)->h_dest);
+	ret = dev_fill_forward_path(hw->dev, hw->eth_dest, &stack);
+	if (ret)
+		goto unsupported;
+	for (i = 0; i < stack.num_paths; i++) {
+		const struct net_device_path *path = &stack.path[i];
+
+		switch (path->type) {
+		case DEV_PATH_VLAN:
+			if (hw->flags & BIT(DEV_PATH_VLAN))
+				goto unsupported;
+			hw->flags |= BIT(DEV_PATH_VLAN);
+			hw->vlan_proto = ntohs(path->encap.proto);
+			hw->vlan_id = path->encap.id;
+			break;
+		case DEV_PATH_PPPOE:
+			hw->flags |= BIT(DEV_PATH_PPPOE);
+			hw->pppoe_sid = path->encap.id;
+			ether_addr_copy(hw->eth_dest, path->encap.h_dest);
+			break;
+		case DEV_PATH_ETHERNET:
+			hw->dev = (struct net_device *)path->dev;
+			ether_addr_copy(hw->eth_src, path->dev->dev_addr);
+			break;
+		default:
+			goto unsupported;
+		}
+	}
+	return 0;
+unsupported:
+	hw->flags |= HNAT_PATH_UNSUPPORTED;
+	return -EOPNOTSUPP;
+}
+
 static inline uint8_t get_wifi_hook_if_index_from_dev(const struct net_device *dev)
 {
 	int i;
@@ -120,7 +162,7 @@ static inline struct net_device *get_dev_from_index(int index)
 static inline struct net_device *get_wandev_from_index(int index)
 {
 	if (!hnat_priv->g_wandev)
-		hnat_priv->g_wandev = __dev_get_by_name(&init_net, hnat_priv->wan);
+		hnat_lookup_netdev(&hnat_priv->g_wandev, hnat_priv->wan);
 
 	if (hnat_priv->g_wandev && hnat_priv->g_wandev->ifindex == index)
 		return hnat_priv->g_wandev;
@@ -300,14 +342,14 @@ static void foe_clear_ethdev_bind_entries(struct net_device *dev)
 		hnat_cache_ebl(1);
 }
 
-void foe_clear_all_bind_entries(struct net_device *dev)
+static void foe_clear_all_bind_entries(struct net_device *dev)
 {
 	int i, hash_index;
 	struct foe_entry *entry;
 
 	if (!IS_LAN(dev) && !IS_WAN(dev) &&
 	    !find_extif_from_devname(dev->name) &&
-	    !dev->netdev_ops->ndo_flow_offload_check)
+	    !dev->netdev_ops->ndo_fill_forward_path)
 		return;
 
 	for (i = 0; i < CFG_PPE_NUM; i++) {
@@ -338,47 +380,34 @@ static void gmac_ppe_fwd_enable(struct net_device *dev)
 		set_gmac_ppe_fwd(1, 1);
 }
 
-void ppd_dev_setting(void)
+/* Called under RTNL. Hold references across the RCU packet-processing path. */
+static void ppd_dev_setting(struct net_device *removed)
 {
-	br_dev = __dev_get_by_name(&init_net, "br-lan");
-	eth1_dev = __dev_get_by_name(&init_net, "eth1");
-        hnat_priv->g_ppdev = __dev_get_by_name(&init_net, "eth0");
-        atomic_set(&eth1_in_br, 0);
-                if (br_dev) {
-			struct net_device *dev;
-                        struct list_head *pos;
-                        netdev_for_each_lower_dev(br_dev, dev, pos) {
-                        if (dev->flags & IFF_UP) {
-				if (netif_carrier_ok(dev)){
-					ppd_dev = __dev_get_by_name(&init_net, dev->name);
-                    if (!strncmp(dev->name, "eth0",4))     
-						break;
-					if (!strncmp(dev->name, "eth1",4))     
-						break;
-					if (!strncmp(dev->name, "lan",3))     
-						break;
-				}
-			}
-                    }
-                }
-        br_dev = __dev_get_by_name(&init_net, "eth1");
-        if (br_dev){
-        if (br_dev->flags & IFF_UP){
-		if (netif_carrier_ok(br_dev))
-			hnat_priv->g_ppdev = __dev_get_by_name(&init_net, "eth1");
-                }
-	}
-        br_dev = __dev_get_by_name(&init_net, "eth0");
-        if (br_dev){
-        if (br_dev->flags & IFF_UP){
-		if (netif_carrier_ok(br_dev))
-                hnat_priv->g_ppdev = __dev_get_by_name(&init_net, "eth0");
-                }
-	}	
-	pr_info("%s : now rx dev: %s, tx dev: %s\n", 
-		__func__, hnat_priv->g_ppdev->name, ppd_dev->name);
-}
+	struct net_device *lan, *inject, *bridge, *lower;
+	struct list_head *pos;
 
+	ASSERT_RTNL();
+	lan = __dev_get_by_name(&init_net, hnat_priv->lan);
+	inject = __dev_get_by_name(&init_net, hnat_priv->ppd);
+	bridge = __dev_get_by_name(&init_net, "br-lan");
+	if (bridge) {
+		netdev_for_each_lower_dev(bridge, lower, pos) {
+			if (lower != removed && (lower->flags & IFF_UP) &&
+			    netif_carrier_ok(lower)) {
+				lan = lower;
+				break;
+			}
+		}
+	}
+	if (lan == removed)
+		lan = NULL;
+	if (inject == removed)
+		inject = NULL;
+	/* MT7981 injects through GMAC0; returned frames use the LAN device. */
+	atomic_set(&eth1_in_br, 0);
+	hnat_replace_netdev(&ppd_dev, lan);
+	hnat_replace_netdev(&hnat_priv->g_ppdev, inject);
+}
 
 int nf_hnat_netdevice_event(struct notifier_block *unused, unsigned long event,
 			    void *ptr)
@@ -389,7 +418,7 @@ int nf_hnat_netdevice_event(struct notifier_block *unused, unsigned long event,
 	
 	switch (event) {
 	 case NETDEV_UP:
-		ppd_dev_setting();
+		ppd_dev_setting(NULL);
                 if (!hnat_priv->guest_en) {
                         if (!strcmp(dev->name, "ra1") || !strcmp(dev->name, "rax1"))
                                 break;
@@ -400,7 +429,7 @@ int nf_hnat_netdevice_event(struct notifier_block *unused, unsigned long event,
 
 		break;
 	case NETDEV_GOING_DOWN:
-		ppd_dev_setting();
+		ppd_dev_setting(NULL);
 		if (!get_wifi_hook_if_index_from_dev(dev))
 			extif_put_dev(dev);
 
@@ -408,7 +437,7 @@ int nf_hnat_netdevice_event(struct notifier_block *unused, unsigned long event,
 
 		break;
 	case NETDEV_CHANGE:
-		ppd_dev_setting();
+		ppd_dev_setting(NULL);
 		/* Clear PPE entries if the slave of bond device physical link down */
 		if (!netif_is_bond_slave(dev) ||
 		    (!IS_LAN(dev) && !IS_WAN(dev)))
@@ -418,20 +447,16 @@ int nf_hnat_netdevice_event(struct notifier_block *unused, unsigned long event,
 		foe_clear_ethdev_bind_entries(dev);
 		break;
 	case NETDEV_UNREGISTER:
-		ppd_dev_setting();
-		if (hnat_priv->g_ppdev == dev) {
-			hnat_priv->g_ppdev = NULL;
-		}
+		ppd_dev_setting(dev);
 		if (hnat_priv->g_wandev == dev) {
-			hnat_priv->g_wandev = NULL;
-			dev_put(dev);
+			hnat_replace_netdev(&hnat_priv->g_wandev, NULL);
 		}
 
 		break;
 	case NETDEV_REGISTER:
-		ppd_dev_setting();
+		ppd_dev_setting(NULL);
 		if (IS_WAN(dev) && !hnat_priv->g_wandev)
-			hnat_priv->g_wandev = __dev_get_by_name(&init_net, hnat_priv->wan);
+			hnat_lookup_netdev(&hnat_priv->g_wandev, hnat_priv->wan);
 
 		break;
 	case MTK_FE_RESET_NAT_DONE:
@@ -439,14 +464,13 @@ int nf_hnat_netdevice_event(struct notifier_block *unused, unsigned long event,
 		hnat_warm_init();
 		break;
 	default:
-		ppd_dev_setting();
 		break;
 	}
 
 	return NOTIFY_DONE;
 }
 
-void foe_clear_entry(struct neighbour *neigh)
+static void foe_clear_entry(struct neighbour *neigh)
 {
 	u32 *daddr = (u32 *)neigh->primary_key;
 	unsigned char h_dest[ETH_ALEN];
@@ -512,7 +536,7 @@ int nf_hnat_netevent_handler(struct notifier_block *unused, unsigned long event,
 	return NOTIFY_DONE;
 }
 
-unsigned int mape_add_ipv6_hdr(struct sk_buff *skb, struct ipv6hdr mape_ip6h)
+static unsigned int mape_add_ipv6_hdr(struct sk_buff *skb, struct ipv6hdr mape_ip6h)
 {
 	struct ethhdr *eth = NULL;
 	struct ipv6hdr *ip6h = NULL;
@@ -552,7 +576,7 @@ static void fix_skb_packet_type(struct sk_buff *skb, struct net_device *dev,
 	}
 }
 
-unsigned int do_hnat_ext_to_ge(struct sk_buff *skb, const struct net_device *in,
+static unsigned int do_hnat_ext_to_ge(struct sk_buff *skb, const struct net_device *in,
 			       const char *func)
 {
 	if (hnat_priv->g_ppdev && hnat_priv->g_ppdev->flags & IFF_UP) {
@@ -582,7 +606,7 @@ unsigned int do_hnat_ext_to_ge(struct sk_buff *skb, const struct net_device *in,
 	return -1;
 }
 
-unsigned int do_hnat_ext_to_ge2(struct sk_buff *skb, const char *func)
+static unsigned int do_hnat_ext_to_ge2(struct sk_buff *skb, const char *func)
 {
 	struct ethhdr *eth = eth_hdr(skb);
 	struct net_device *dev;
@@ -641,7 +665,7 @@ unsigned int do_hnat_ext_to_ge2(struct sk_buff *skb, const char *func)
 	}
 }
 
-unsigned int do_hnat_ge_to_ext(struct sk_buff *skb, const char *func)
+static unsigned int do_hnat_ge_to_ext(struct sk_buff *skb, const char *func)
 {
 	/*set where we to go*/
 	u8 index;
@@ -768,7 +792,7 @@ static inline void hnat_set_iif(const struct nf_hook_state *state,
 	} else if (IS_WAN(state->in)) {
 		skb_hnat_iface(skb) = FOE_MAGIC_GE_WAN;
 	} else if (!IS_BR(state->in)) {
-		if (state->in->netdev_ops->ndo_flow_offload_check) {
+		if (state->in->netdev_ops->ndo_fill_forward_path) {
 			skb_hnat_iface(skb) = FOE_MAGIC_GE_VIRTUAL;
 		} else {
 			skb_hnat_iface(skb) = FOE_INVALID;
@@ -807,7 +831,7 @@ static void ppe_fill_flow_lbl(struct foe_entry *entry, struct ipv6hdr *ip6h)
 	entry->ipv4_dslite.flow_lbl[2] = ip6h->flow_lbl[0];
 }
 
-unsigned int do_hnat_mape_w2l_fast(struct sk_buff *skb, const struct net_device *in,
+static unsigned int do_hnat_mape_w2l_fast(struct sk_buff *skb, const struct net_device *in,
 				   const char *func)
 {
 	struct ipv6hdr *ip6h = ipv6_hdr(skb);
@@ -845,7 +869,7 @@ unsigned int do_hnat_mape_w2l_fast(struct sk_buff *skb, const struct net_device 
 		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), VLAN_CFI_MASK | (in->ifindex & VLAN_VID_MASK));
 
 		if (!hnat_priv->g_ppdev)
-			hnat_priv->g_ppdev = __dev_get_by_name(&init_net, hnat_priv->ppd);
+			hnat_lookup_netdev(&hnat_priv->g_ppdev, hnat_priv->ppd);
 
 		skb->dev = hnat_priv->g_ppdev;
 		skb->protocol = htons(ETH_P_IP);
@@ -858,7 +882,7 @@ unsigned int do_hnat_mape_w2l_fast(struct sk_buff *skb, const struct net_device 
 }
 
 #if defined(CONFIG_MEDIATEK_NETSYS_V2)
-unsigned int do_hnat_mape_w2l(struct sk_buff *skb, const struct net_device *in,
+static unsigned int do_hnat_mape_w2l(struct sk_buff *skb, const struct net_device *in,
 				   const char *func)
 {
 	struct ipv6hdr *ip6h = ipv6_hdr(skb);
@@ -1075,8 +1099,6 @@ static void mtk_hnat_nf_update(struct sk_buff *skb)
 			counter = acct->counter;
 			atomic64_add(diff.packets, &counter[CTINFO2DIR(ctinfo)].packets);
 			atomic64_add(diff.bytes, &counter[CTINFO2DIR(ctinfo)].bytes);
-			atomic64_set(&counter[CTINFO2DIR(ctinfo)].diff_packets, diff.packets);
-			atomic64_set(&counter[CTINFO2DIR(ctinfo)].diff_bytes, diff.bytes);
 		}
 	}
 }
@@ -1216,10 +1238,10 @@ mtk_hnat_ipv4_nf_pre_routing(void *priv, struct sk_buff *skb,
 	hnat_set_head_frags(state, skb, -1, hnat_set_iif);
 
 	if (skb_hnat_iface(skb) == FOE_MAGIC_GE_VIRTUAL
-	    && skb->dev->netdev_ops->ndo_flow_offload_check) {
-		skb->dev->netdev_ops->ndo_flow_offload_check(&hw_path);
+	    && skb->dev->netdev_ops->ndo_fill_forward_path) {
+		hnat_fill_forward_path(&hw_path, skb);
 
-		if (hw_path.flags & BIT(DEV_PATH_TNL))
+		if (hw_path.flags & HNAT_PATH_UNSUPPORTED)
 			skb_hnat_alg(skb) = 1;
 	}
 
@@ -1350,7 +1372,7 @@ static u16 ppe_get_chkbase(struct iphdr *iph)
 	return chksum_base;
 }
 
-struct foe_entry ppe_fill_L2_info(struct foe_entry entry,
+static struct foe_entry ppe_fill_L2_info(struct foe_entry entry,
 				  struct flow_offload_hw_path *hw_path)
 {
 	switch (entry.bfib1.pkt_type) {
@@ -1377,7 +1399,7 @@ struct foe_entry ppe_fill_L2_info(struct foe_entry entry,
 	return entry;
 }
 
-struct foe_entry ppe_fill_info_blk(struct foe_entry entry,
+static struct foe_entry ppe_fill_info_blk(struct foe_entry entry,
 				   struct flow_offload_hw_path *hw_path)
 {
 	entry.bfib1.psn = (hw_path->flags & BIT(DEV_PATH_PPPOE)) ? 1 : 0;
@@ -2346,8 +2368,9 @@ static unsigned int mtk_hnat_nf_post_routing(
 	if (unlikely(skb->mark == HNAT_EXCEPTION_TAG))
 		return 0;
 
-	if (out->netdev_ops->ndo_flow_offload_check) {
-		out->netdev_ops->ndo_flow_offload_check(&hw_path);
+	if (out->netdev_ops->ndo_fill_forward_path) {
+		if (hnat_fill_forward_path(&hw_path, skb))
+			return 0;
 		out = (IS_GMAC1_MODE) ? hw_path.virt_dev : hw_path.dev;
 	}
 	
@@ -2483,7 +2506,7 @@ mtk_hnat_br_nf_local_in(void *priv, struct sk_buff *skb,
 	    !is_multicast_ether_addr(eth_hdr(skb)->h_dest)) {
  		
 		if (!hnat_priv->g_ppdev)
-			hnat_priv->g_ppdev = __dev_get_by_name(&init_net, hnat_priv->ppd);
+			hnat_lookup_netdev(&hnat_priv->g_ppdev, hnat_priv->ppd);
 
 		if (!do_hnat_ext_to_ge(skb, state->in, __func__))
 			return NF_STOLEN;

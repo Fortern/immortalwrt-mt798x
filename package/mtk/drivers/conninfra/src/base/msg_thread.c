@@ -291,7 +291,7 @@ void msg_opq_dump(const char *qName, struct msg_op_q *op_q)
  *  msg_evt_thread API
  */
 
-int msg_evt_put_op_to_free_queue(struct msg_thread_ctx *ctx, struct msg_op *op)
+static int msg_evt_put_op_to_free_queue(struct msg_thread_ctx *ctx, struct msg_op *op)
 {
 	if (msg_evt_put_op_to_q(&ctx->free_op_q, op))
 		return -1;
@@ -299,7 +299,7 @@ int msg_evt_put_op_to_free_queue(struct msg_thread_ctx *ctx, struct msg_op *op)
 }
 
 
-struct msg_op *msg_evt_get_free_op(struct msg_thread_ctx *ctx)
+static struct msg_op *msg_evt_get_free_op(struct msg_thread_ctx *ctx)
 {
 	struct msg_op *op = NULL;
 
@@ -313,7 +313,7 @@ struct msg_op *msg_evt_get_free_op(struct msg_thread_ctx *ctx)
 	return op;
 }
 
-int msg_evt_put_op_to_active(struct msg_thread_ctx *ctx, struct msg_op *op)
+static int msg_evt_put_op_to_active(struct msg_thread_ctx *ctx, struct msg_op *op)
 {
 	P_OSAL_SIGNAL signal = NULL;
 	int wait_ret = -1;
@@ -468,7 +468,7 @@ int msg_thread_send_wait_3(struct msg_thread_ctx *ctx,
 
 }
 
-void msg_op_history_save(struct osal_op_history *log_history, struct msg_op *op)
+static void msg_op_history_save(struct osal_op_history *log_history, struct msg_op *op)
 {
 	struct osal_op_history_entry *entry = NULL;
 	struct ring_segment seg;
@@ -508,7 +508,7 @@ void msg_op_history_save(struct osal_op_history *log_history, struct msg_op *op)
 	spin_unlock_irqrestore(&(log_history->lock), flags);
 }
 
-unsigned int msg_evt_wait_event_checker(P_OSAL_THREAD thread)
+static unsigned int msg_evt_wait_event_checker(P_OSAL_THREAD thread)
 {
 	struct msg_thread_ctx *ctx = NULL;
 
@@ -519,13 +519,13 @@ unsigned int msg_evt_wait_event_checker(P_OSAL_THREAD thread)
 	return 0;
 }
 
-int msg_evt_set_current_op(struct msg_thread_ctx *ctx, struct msg_op *op)
+static int msg_evt_set_current_op(struct msg_thread_ctx *ctx, struct msg_op *op)
 {
 	ctx->cur_op = op;
 	return 0;
 }
 
-int msg_evt_opid_handler(struct msg_thread_ctx *ctx, struct msg_op_data *op)
+static int msg_evt_opid_handler(struct msg_thread_ctx *ctx, struct msg_op_data *op)
 {
 	int opid, ret;
 

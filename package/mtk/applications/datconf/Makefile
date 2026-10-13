@@ -10,6 +10,8 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=datconf
 PKG_REVISION:=6bb733f7
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_REVISION).tar.bz2
+PKG_SOURCE_URL:=file://$(TOPDIR)/package/mtk/applications/datconf
+PKG_HASH:=c1632b1950407e731c8a36b14d50d6e04bed7e7218938283e06e16ac9050d20b
 PKG_RELEASE:=1
 PKG_USE_NINJA:=0
 

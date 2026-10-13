@@ -236,7 +236,7 @@ function mtwifi_up(devname, cfg, restore_vifs, is_dbdc)
 
     mtwifi_cfg_foreach_vif(cfg, "ap", start_vif)
     mtwifi_cfg_foreach_vif(cfg, "sta", start_vif)
-    os.execute("startwapp.sh")
+    run_wapp_hook()
 end
 
 function mtwifi_down(devname, cfg)
@@ -255,7 +255,7 @@ function mtwifi_down(devname, cfg)
             end
         end
     end
-    os.execute("startwapp.sh")
+    run_wapp_hook()
     return reset_vifs
 end
 
@@ -633,18 +633,20 @@ function mtwifi_cfg_setup(argv)
 
     if string.find(profile, "dbdc") then
         if reinstall_wifidrv then
+            local restore_vifs = {}
             for k, _ in pairs(l1dat.devname_ridx) do
-                mtwifi_down(k)
+                for _, vif in ipairs(mtwifi_down(k, cfg)) do
+                    restore_vifs[#restore_vifs + 1] = vif
+                end
             end
 
             mtwifi_reinstall()
 
             for k, _ in pairs(l1dat.devname_ridx) do
-                if k == devname then
-                    mtwifi_up(k, cfg, nil, true)
-                else
-                    os.execute("/sbin/wifi up " .. k) -- TODO: may cause deadlock
-                end
+                -- Both bands share the module and the netifd configuration lock.
+                -- Restore existing interfaces directly; recursive wifi up would
+                -- wait for the lock held by this setup operation.
+                mtwifi_up(k, cfg, restore_vifs, true)
             end
         else
             local restore_vifs = {}

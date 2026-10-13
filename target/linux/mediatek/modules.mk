@@ -1,3 +1,20 @@
+define KernelPackage/mediatek_hnat
+  SUBMENU:=Network Devices
+  TITLE:=MediaTek vendor HNAT for MT7981
+  DEPENDS:=@TARGET_mediatek_filogic +kmod-nf-conntrack +kmod-nf-nat +wireless-tools
+  KCONFIG:= \
+	CONFIG_BRIDGE_NETFILTER=y \
+	CONFIG_NETFILTER_FAMILY_BRIDGE=y \
+	CONFIG_MEDIATEK_NETSYS_V2=y \
+	CONFIG_MTK_VENDOR_WIFI_UTILITY=y \
+	CONFIG_NET_MEDIATEK_SOC_WED=n \
+	CONFIG_NET_MEDIATEK_HNAT
+  FILES:=$(LINUX_DIR)/drivers/net/ethernet/mediatek/mtk_hnat/mtkhnat.ko
+  AUTOLOAD:=$(call AutoLoad,20,mtkhnat)
+endef
+
+$(eval $(call KernelPackage,mediatek_hnat))
+
 define KernelPackage/ata-ahci-mtk
   TITLE:=Mediatek AHCI Serial ATA support
   KCONFIG:=CONFIG_AHCI_MTK

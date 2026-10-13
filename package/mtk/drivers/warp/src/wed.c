@@ -908,7 +908,7 @@ wed_proc_handle(struct wed_entry *wed, char choice, char *arg)
 
 	case WED_PROC_TX_DYNAMIC_FREE: {
 		if(IS_WED_HW_CAP(wed, WED_HW_CAP_DYN_TXBM))
-			buf_free_task((unsigned long)wed);
+			buf_free_task(wed);
 		else
 			warp_dbg(WARP_DBG_ERR, "DYBM is not enabled!\n");
 	}

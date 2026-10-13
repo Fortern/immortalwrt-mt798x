@@ -13,7 +13,7 @@ int hnat_dsa_get_port(struct net_device **dev)
 	dp = dsa_port_from_netdev(*dev);
 	if (IS_ERR(dp))
 		return -ENODEV;
-	*dev = dp->cpu_dp->master;
+	*dev = dp->cpu_dp->conduit;
 	return dp->index;
 #else
 	return -ENODEV;

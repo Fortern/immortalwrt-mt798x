@@ -965,6 +965,21 @@ enum FoeIpAct {
 extern const struct of_device_id of_hnat_match[];
 extern struct mtk_hnat *hnat_priv;
 
+/* Local vendor descriptor; traversal uses the upstream netdevice path API. */
+struct flow_offload_hw_path {
+	struct net_device *dev;
+	struct net_device *virt_dev;
+	u32 flags;
+	u32 skb_hash;
+	u8 eth_src[ETH_ALEN];
+	u8 eth_dest[ETH_ALEN];
+	u16 vlan_proto;
+	u16 vlan_id;
+	u16 pppoe_sid;
+};
+
+#define HNAT_PATH_UNSUPPORTED BIT(31)
+
 int hnat_dsa_fill_stag(const struct net_device *netdev,
 		       struct foe_entry *entry,
 		       struct flow_offload_hw_path *hw_path,
@@ -1023,3 +1038,10 @@ static inline u16 foe_timestamp(struct mtk_hnat *h)
 {
 	return (readl(hnat_priv->fe_base + 0x0010)) & 0xffff;
 }
+
+/* Refcounted netdevice cache used by the vendor forwarding path. */
+void hnat_replace_netdev(struct net_device **slot, struct net_device *dev);
+void hnat_lookup_netdev(struct net_device **slot, const char *name);
+
+int get_ppe_mib(u32 ppe_id, int index, u64 *pkt_cnt, u64 *byte_cnt);
+int is_entry_binding(u32 ppe_id, int index);

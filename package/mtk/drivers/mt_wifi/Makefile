@@ -20,7 +20,9 @@ endif
 endif
 
 PKG_BUILD_DEPENDS:=warp
-PKG_VERSION:=7.6.6.1-$(PKG_SUFFIX)
+# APK accepts numeric versions and hexadecimal revision suffixes. The chipset
+# remains selected by Kconfig and recorded in the expanded build configuration.
+PKG_VERSION:=7.6.6.1
 
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
@@ -283,6 +285,8 @@ TAR_CMD=$(HOST_TAR) -C $(1)/ $(TAR_OPTIONS)
 define KernelPackage/mt_wifi
   CATEGORY:=MTK Properties
   TITLE:=MTK wifi AP driver
+  KCONFIG:=CONFIG_WIRELESS_EXT=y CONFIG_WEXT_CORE=y CONFIG_WEXT_PROC=y \
+	CONFIG_WEXT_SPY=y CONFIG_WEXT_PRIV=y
   DEPENDS:=+wifi-dats
   DEPENDS+=+kmod-conninfra
   DEPENDS+=+kmod-mediatek_hnat

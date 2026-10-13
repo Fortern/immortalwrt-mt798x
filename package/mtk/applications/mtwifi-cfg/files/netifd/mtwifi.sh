@@ -27,6 +27,14 @@ drv_mtwifi_init_iface_config() {
 	config_add_boolean mumimo_dl mumimo_ul ofdma_dl ofdma_ul amsdu autoba uapsd
 }
 
+drv_mtwifi_init_vlan_config() {
+	:
+}
+
+drv_mtwifi_init_station_config() {
+	:
+}
+
 drv_mtwifi_cleanup() {
 	return
 }
@@ -111,7 +119,11 @@ drv_mtwifi_setup() {
 	APCLI_IDX=0
 	for_each_interface sta mtwifi_vif_sta_set_data
 
-	json_dump | /sbin/mtwifi_cfg setup
+	if ! json_dump | /sbin/mtwifi_cfg setup; then
+		lock -u "$LOCK_FILE"
+		wireless_setup_failed "MTWIFI_SETUP_FAILED"
+		return 1
+	fi
 
 	for_each_interface ap mtwifi_vif_ap_config
 	for_each_interface sta mtwifi_vif_sta_config

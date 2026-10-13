@@ -150,7 +150,7 @@ static void ccif_exit(struct woif_bus *bus)
 		disable_irq(ccif->irq);
 		free_irq(ccif->irq, bus);
 		if (ccif->base_addr)
-			iounmap(ccif->base_addr);
+			iounmap((void __iomem *)ccif->base_addr);
 		warp_os_free_mem(ccif);
 	}
 

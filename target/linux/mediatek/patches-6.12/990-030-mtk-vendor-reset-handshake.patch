@@ -1,0 +1,132 @@
+diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+index 01eb83f..50b920e 100644
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -43,6 +43,72 @@ struct net_device *ppd_dev;
+ EXPORT_SYMBOL(ppd_dev);
+ atomic_t eth1_in_br = ATOMIC_INIT(0);
+ EXPORT_SYMBOL(eth1_in_br);
++
++static DECLARE_COMPLETION(mtk_vendor_ser_done);
++/* The netdevice notifier and reset work serialize these counters with RTNL. */
++static unsigned int mtk_vendor_radios;
++static unsigned int mtk_vendor_reset_pending;
++
++static int mtk_vendor_netdev_event(struct notifier_block *nb,
++				 unsigned long event, void *ptr)
++{
++	switch (event) {
++	case MTK_WIFI_CHIP_ONLINE:
++		mtk_vendor_radios++;
++		break;
++	case MTK_WIFI_CHIP_OFFLINE:
++		if (mtk_vendor_radios)
++			mtk_vendor_radios--;
++		fallthrough;
++	case MTK_WIFI_RESET_DONE:
++		if (mtk_vendor_reset_pending && !--mtk_vendor_reset_pending)
++			complete(&mtk_vendor_ser_done);
++		break;
++	}
++	return NOTIFY_DONE;
++}
++
++static struct notifier_block mtk_vendor_netdev_nb = {
++	.notifier_call = mtk_vendor_netdev_event,
++};
++
++static void mtk_vendor_reset_begin(struct mtk_eth *eth)
++{
++	int i;
++
++	ASSERT_RTNL();
++	if (!mtk_vendor_radios)
++		return;
++	for (i = 0; i < MTK_MAX_DEVS; i++) {
++		if (!eth->netdev[i])
++			continue;
++		reinit_completion(&mtk_vendor_ser_done);
++		mtk_vendor_reset_pending = mtk_vendor_radios;
++		call_netdevice_notifiers(MTK_FE_START_RESET, eth->netdev[i]);
++		/* Wi-Fi acknowledges under RTNL; never wait while holding it. */
++		rtnl_unlock();
++		if (!wait_for_completion_timeout(&mtk_vendor_ser_done,
++						msecs_to_jiffies(5000)))
++			dev_warn(eth->dev, "vendor Wi-Fi reset acknowledgement timed out\n");
++		rtnl_lock();
++		mtk_vendor_reset_pending = 0;
++		break;
++	}
++}
++
++static void mtk_vendor_reset_end(struct mtk_eth *eth)
++{
++	int i;
++
++	ASSERT_RTNL();
++	for (i = 0; i < MTK_MAX_DEVS; i++) {
++		if (!eth->netdev[i])
++			continue;
++		call_netdevice_notifiers(MTK_FE_RESET_NAT_DONE, eth->netdev[i]);
++		call_netdevice_notifiers(MTK_FE_RESET_DONE, eth->netdev[i]);
++		break;
++	}
++}
+ #endif
+ 
+ static int mtk_msg_level = -1;
+@@ -4750,7 +4816,11 @@ static void mtk_pending_work(struct work_struct *work)
+ 	mtk_hw_dump(eth);
+ 
+ 	mtk_prepare_for_reset(eth);
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++	mtk_vendor_reset_begin(eth);
++#else
+ 	mtk_wed_fe_reset();
++#endif
+ 	/* Run again reset preliminary configuration in order to avoid any
+ 	 * possible race during FE reset since it can run releasing RTNL lock.
+ 	 */
+@@ -4799,7 +4869,11 @@ static void mtk_pending_work(struct work_struct *work)
+ 
+ 	clear_bit(MTK_RESETTING, &eth->state);
+ 
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++	mtk_vendor_reset_end(eth);
++#else
+ 	mtk_wed_fe_reset_complete();
++#endif
+ 
+ 	rtnl_unlock();
+ }
+@@ -6140,7 +6214,30 @@ static struct platform_driver mtk_driver = {
+ 	},
+ };
+ 
++#if IS_ENABLED(CONFIG_NET_MEDIATEK_HNAT)
++static int __init mtk_vendor_driver_init(void)
++{
++	int ret;
++
++	ret = register_netdevice_notifier(&mtk_vendor_netdev_nb);
++	if (ret)
++		return ret;
++	ret = platform_driver_register(&mtk_driver);
++	if (ret)
++		unregister_netdevice_notifier(&mtk_vendor_netdev_nb);
++	return ret;
++}
++module_init(mtk_vendor_driver_init);
++
++static void __exit mtk_vendor_driver_exit(void)
++{
++	platform_driver_unregister(&mtk_driver);
++	unregister_netdevice_notifier(&mtk_vendor_netdev_nb);
++}
++module_exit(mtk_vendor_driver_exit);
++#else
+ module_platform_driver(mtk_driver);
++#endif
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("John Crispin <blogic@openwrt.org>");

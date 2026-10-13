@@ -1305,7 +1305,7 @@ define Device/cudy_tr3000-256mb-v1
   DEVICE_VENDOR := Cudy
   DEVICE_MODEL := TR3000
   DEVICE_VARIANT := 256mb v1
-  DEVICE_DTS := mt7981b-cudy-tr3000-256mb-v1
+  DEVICE_DTS := mt7981b-cudy-tr3000-256mb-v1-mtk
   DEVICE_DTS_DIR := ../dts
   SUPPORTED_DEVICES += R103
   UBINIZE_OPTS := -E 5
@@ -1314,7 +1314,7 @@ define Device/cudy_tr3000-256mb-v1
   IMAGE_SIZE := 235520k
   KERNEL_IN_UBI := 1
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
-  DEVICE_PACKAGES := kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount
+  DEVICE_PACKAGES := kmod-usb3 kmod-mt_wifi mtwifi-cfg luci-app-mtwifi-cfg automount
 endef
 TARGET_DEVICES += cudy_tr3000-256mb-v1
 

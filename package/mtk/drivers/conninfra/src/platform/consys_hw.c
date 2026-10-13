@@ -62,7 +62,7 @@
 */
 
 static int mtk_conninfra_probe(struct platform_device *pdev);
-static int mtk_conninfra_remove(struct platform_device *pdev);
+static void mtk_conninfra_remove(struct platform_device *pdev);
 static int mtk_conninfra_suspend(struct platform_device *pdev, pm_message_t state);
 static int mtk_conninfra_resume(struct platform_device *pdev);
 
@@ -588,7 +588,7 @@ int mtk_conninfra_probe(struct platform_device *pdev)
 	return ret;
 }
 
-int mtk_conninfra_remove(struct platform_device *pdev)
+static void mtk_conninfra_remove(struct platform_device *pdev)
 {
 	int ret;
 
@@ -611,8 +611,6 @@ int mtk_conninfra_remove(struct platform_device *pdev)
 
 	if (g_pdev)
 		g_pdev = NULL;
-
-	return 0;
 }
 
 int mtk_conninfra_suspend(struct platform_device *pdev, pm_message_t state)

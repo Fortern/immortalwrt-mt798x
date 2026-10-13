@@ -65,6 +65,8 @@ struct rbus_dev {
 	char name[36];
 	struct device *dev;
 	struct resource *res;
+	struct resource bus_range;
+	struct pci_bus *bus;
 	struct list_head resources;
 	unsigned int base_addr;
 	unsigned int irq;
@@ -240,6 +242,7 @@ static int rbus_add_port(struct rbus_dev *rbus,
 
 	if (!bus)
 		return -ENOMEM;
+	rbus->bus = bus;
 
 	pci_bus_add_devices(bus);
 
@@ -258,16 +261,17 @@ static int rbus_add_res(struct rbus_dev *rbus)
 {
 	struct device *dev = rbus->dev;
 	struct platform_device *pdev = to_platform_device(dev);
-	struct resource bus_range;
 
 	INIT_LIST_HEAD(&rbus->resources);
 	/*resource allocate*/
 	rbus->res  = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!rbus->res)
+		return -ENODEV;
 	rbus->irq = platform_get_irq(pdev, 0);
 	rbus->base_addr = (unsigned int)rbus->res->start;
 	if (rbus->chip_id == 0x7629)
 		dev_second_irq = platform_get_irq(pdev, 1);
-	else if (rbus->chip_id == 0x7986) {
+	else if (rbus->chip_id == 0x7986 || rbus->chip_id == 0x7981) {
 		multi_intr_2nd = platform_get_irq(pdev, 1);
 		multi_intr_3rd = platform_get_irq(pdev, 2);
 		multi_intr_4th = platform_get_irq(pdev, 3);
@@ -275,14 +279,14 @@ static int rbus_add_res(struct rbus_dev *rbus)
 
 	pci_add_resource(&rbus->resources, rbus->res);
 
-	bus_range = (struct resource) {
+	rbus->bus_range = (struct resource) {
 		.name	= "rbus_range",
 		.start	= 0,
 		.end	= 0xff,
 		.flags	= IORESOURCE_BUS,
 	};
 
-	pci_add_resource(&rbus->resources, &bus_range);
+	pci_add_resource(&rbus->resources, &rbus->bus_range);
 	return 0;
 }
 
@@ -291,10 +295,10 @@ static int rbus_add_res(struct rbus_dev *rbus)
 */
 static int rbus_probe(struct platform_device *pdev)
 {
-	struct device_node *node = NULL;
+	struct device_node *node = pdev->dev.of_node;
 	struct rbus_dev *rbus;
+	int ret;
 
-	node = of_find_compatible_node(NULL, NULL, OF_RBUS_NAME);
 	if (!node)
 		return -ENODEV;
 
@@ -316,22 +320,26 @@ static int rbus_probe(struct platform_device *pdev)
 	/*set priv_data to pdev*/
 	snprintf(rbus->name,sizeof(rbus->name),"mediatek-rbus");
 	platform_set_drvdata(pdev, rbus);
-	rbus_add_res(rbus);
+	ret = rbus_add_res(rbus);
+	if (ret)
+		return ret;
 	/*init config, need run before add port*/
 	rbus_init_config(rbus);
 	/*add pci bus & device*/
-	rbus_add_port(rbus, pdev);
-	return -ENODEV;
+	ret = rbus_add_port(rbus, pdev);
+	if (ret)
+		pci_free_resource_list(&rbus->resources);
+	return ret;
 }
 
 /*
 *
 */
-static int rbus_remove(struct platform_device *pdev)
+static void rbus_remove(struct platform_device *pdev)
 {
 	struct rbus_dev *rbus = platform_get_drvdata(pdev);
-	dev_err(&pdev->dev, "remove rbus name: %s\n", rbus->name);
-	return 0;
+	pci_stop_root_bus(rbus->bus);
+	pci_remove_root_bus(rbus->bus);
 }
 
 

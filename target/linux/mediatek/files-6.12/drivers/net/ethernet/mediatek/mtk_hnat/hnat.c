@@ -26,6 +26,31 @@
 #include "hnat.h"
 
 struct mtk_hnat *hnat_priv;
+extern struct net_device *ppd_dev;
+
+void hnat_replace_netdev(struct net_device **slot, struct net_device *dev)
+{
+	struct net_device *old;
+
+	if (dev)
+		dev_hold(dev);
+	old = xchg(slot, dev);
+	if (old) {
+		synchronize_net();
+		dev_put(old);
+	}
+}
+
+void hnat_lookup_netdev(struct net_device **slot, const char *name)
+{
+	struct net_device *dev;
+
+	if (READ_ONCE(*slot))
+		return;
+	dev = dev_get_by_name(&init_net, name);
+	if (dev && cmpxchg(slot, NULL, dev))
+		dev_put(dev);
+}
 static struct socket *_hnat_roam_sock;
 static struct work_struct _hnat_roam_work;
 
@@ -384,7 +409,7 @@ static int hnat_hw_init(u32 ppe_id)
 		cr_set_field(hnat_priv->ppe_base[ppe_id] + PPE_MIB_CAH_CTRL, MIB_CAH_EN, 1);
 	}
 
-	hnat_priv->g_wandev = __dev_get_by_name(&init_net, hnat_priv->wan);
+	hnat_lookup_netdev(&hnat_priv->g_wandev, hnat_priv->wan);
 
 	dev_info(hnat_priv->dev, "PPE%d hwnat start\n", ppe_id);
 	
@@ -557,11 +582,9 @@ static void hnat_release_netdev(void)
 		kfree(ext_entry);
 	}
 
-	if (hnat_priv->g_ppdev)
-		dev_put(hnat_priv->g_ppdev);
-
-	if (hnat_priv->g_wandev)
-		dev_put(hnat_priv->g_wandev);
+	hnat_replace_netdev(&ppd_dev, NULL);
+	hnat_replace_netdev(&hnat_priv->g_ppdev, NULL);
+	hnat_replace_netdev(&hnat_priv->g_wandev, NULL);
 }
 
 static struct notifier_block nf_hnat_netdevice_nb __read_mostly = {
@@ -850,7 +873,7 @@ err_out1:
 	return err;
 }
 
-static int hnat_remove(struct platform_device *pdev)
+static void hnat_remove(struct platform_device *pdev)
 {
 	int i;
 
@@ -873,8 +896,6 @@ static int hnat_remove(struct platform_device *pdev)
 
 	if (IS_HQOS_MODE && IS_GMAC1_MODE)
 		dev_remove_pack(&mtk_pack_type);
-
-	return 0;
 }
 
 static const struct mtk_hnat_data hnat_data_v1 = {

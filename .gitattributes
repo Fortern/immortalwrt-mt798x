@@ -1,4 +1,10 @@
-* -text
+* text=auto eol=lf
+*.bin -text
+*.xz -text
+*.gz -text
+*.zst -text
+*.png -text
+*.jpg -text
 *.patch whitespace=-indent-with-non-tab,-space-before-tab,-tab-in-indent,-trailing-space
 *.dts text eol=lf
 *.dts[io] text eol=lf

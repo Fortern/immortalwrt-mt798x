@@ -30,7 +30,12 @@ int mt_mtd_write_nm_wifi(char *name, loff_t to, size_t len, const u_char *buf)
 	if (IS_ERR(mtd))
 		return -1;
 
-	if (len > mtd->erasesize) {
+	if (!(mtd->flags & MTD_WRITEABLE)) {
+		put_mtd_device(mtd);
+		return -EROFS;
+	}
+
+	if (to < 0 || to > mtd->erasesize || len > mtd->erasesize - to) {
 		put_mtd_device(mtd);
 		return -E2BIG;
 	}
@@ -43,14 +48,17 @@ int mt_mtd_write_nm_wifi(char *name, loff_t to, size_t len, const u_char *buf)
 
 	ret = mtd_read(mtd, 0, mtd->erasesize, &rdlen, bak);
 
-	if (ret != 0) {
+	if (ret && !mtd_is_bitflip(ret)) {
 		put_mtd_device(mtd);
 		kfree(bak);
 		return ret;
 	}
 
-	if (rdlen != mtd->erasesize)
-		printk("warning: ra_mtd_write: rdlen is not equal to erasesize\n");
+	if (rdlen != mtd->erasesize) {
+		put_mtd_device(mtd);
+		kfree(bak);
+		return -EIO;
+	}
 
 	memcpy(bak + to, buf, len);
 
@@ -70,6 +78,8 @@ int mt_mtd_write_nm_wifi(char *name, loff_t to, size_t len, const u_char *buf)
 	}
 
 	ret = mtd_write(mtd, 0, mtd->erasesize, &wrlen, bak);
+	if (!ret && wrlen != mtd->erasesize)
+		ret = -EIO;
 
 
 
@@ -96,8 +106,10 @@ int mt_mtd_read_nm_wifi(char *name, loff_t from, size_t len, u_char *buf)
 
 	ret = mtd_read(mtd, from, len, &rdlen, buf);
 
-	if (rdlen != len)
-			printk("warning: ra_mtd_read_nm: rdlen is not equal to len\n");
+	if (mtd_is_bitflip(ret))
+		ret = 0;
+	if (!ret && rdlen != len)
+		ret = -EIO;
 
 	put_mtd_device(mtd);
 

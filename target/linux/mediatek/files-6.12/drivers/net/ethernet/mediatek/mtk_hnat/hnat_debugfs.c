@@ -242,7 +242,7 @@ uint32_t hnat_cpu_reason_cnt(struct sk_buff *skb)
 	return 0;
 }
 
-int hnat_set_usage(int level)
+static int hnat_set_usage(int level)
 {
 	debug_level = level;
 	pr_info("Read cpu_reason count: cat /sys/kernel/debug/hnat/cpu_reason\n\n");
@@ -282,7 +282,7 @@ int hnat_set_usage(int level)
 	return 0;
 }
 
-int hnat_cpu_reason(int cpu_reason)
+static int hnat_cpu_reason(int cpu_reason)
 {
 	dbg_cpu_reason = cpu_reason;
 	debug_level = 7;
@@ -291,7 +291,7 @@ int hnat_cpu_reason(int cpu_reason)
 	return 0;
 }
 
-int entry_set_usage(int level)
+static int entry_set_usage(int level)
 {
 	debug_level = level;
 	pr_info("Show all entries(default state=bind): cat /sys/kernel/debug/hnat/hnat_entry\n\n");
@@ -311,7 +311,7 @@ int entry_set_usage(int level)
 	return 0;
 }
 
-int entry_set_state(int state)
+static int entry_set_state(int state)
 {
 	dbg_entry_state = state;
 	pr_info("ENTRY STATE = %s\n", dbg_entry_state == 0 ?
@@ -322,12 +322,12 @@ int entry_set_state(int state)
 	return 0;
 }
 
-int wrapped_ppe0_entry_detail(int index) {
+static int wrapped_ppe0_entry_detail(int index) {
 	entry_detail(0, index);
 	return 0;
 }
 
-int wrapped_ppe1_entry_detail(int index) {
+static int wrapped_ppe1_entry_detail(int index) {
 	entry_detail(1, index);
 	return 0;
 }
@@ -515,12 +515,12 @@ int entry_detail(u32 ppe_id, int index)
 	return 0;
 }
 
-int wrapped_ppe0_entry_delete(int index) {
+static int wrapped_ppe0_entry_delete(int index) {
 	entry_delete(0, index);
 	return 0;
 }
 
-int wrapped_ppe1_entry_delete(int index) {
+static int wrapped_ppe1_entry_delete(int index) {
 	entry_delete(1, index);
 	return 0;
 }
@@ -555,7 +555,7 @@ int entry_delete(u32 ppe_id, int index)
 }
 EXPORT_SYMBOL(entry_delete);
 
-int cr_set_usage(int level)
+static int cr_set_usage(int level)
 {
 	debug_level = level;
 	pr_info("Dump hnat CR: cat /sys/kernel/debug/hnat/hnat_setting\n\n");
@@ -580,7 +580,7 @@ int cr_set_usage(int level)
 	return 0;
 }
 
-int binding_threshold(int threshold)
+static int binding_threshold(int threshold)
 {
 	int i;
 
@@ -592,7 +592,7 @@ int binding_threshold(int threshold)
 	return 0;
 }
 
-int tcp_bind_lifetime(int tcp_life)
+static int tcp_bind_lifetime(int tcp_life)
 {
 	int i;
 
@@ -606,7 +606,7 @@ int tcp_bind_lifetime(int tcp_life)
 	return 0;
 }
 
-int fin_bind_lifetime(int fin_life)
+static int fin_bind_lifetime(int fin_life)
 {
 	int i;
 
@@ -620,7 +620,7 @@ int fin_bind_lifetime(int fin_life)
 	return 0;
 }
 
-int udp_bind_lifetime(int udp_life)
+static int udp_bind_lifetime(int udp_life)
 {
 	int i;
 
@@ -634,7 +634,7 @@ int udp_bind_lifetime(int udp_life)
 	return 0;
 }
 
-int tcp_keep_alive(int tcp_interval)
+static int tcp_keep_alive(int tcp_interval)
 {
 	int i;
 
@@ -653,7 +653,7 @@ int tcp_keep_alive(int tcp_interval)
 	return 0;
 }
 
-int udp_keep_alive(int udp_interval)
+static int udp_keep_alive(int udp_interval)
 {
 	int i;
 
@@ -672,7 +672,7 @@ int udp_keep_alive(int udp_interval)
 	return 0;
 }
 
-int set_nf_update_toggle(int toggle)
+static int set_nf_update_toggle(int toggle)
 {
 	struct mtk_hnat *h = hnat_priv;
 
@@ -687,7 +687,7 @@ int set_nf_update_toggle(int toggle)
 	return 0;
 }
 
-int set_ipv6_toggle(int toggle)
+static int set_ipv6_toggle(int toggle)
 {
 	struct mtk_hnat *h = hnat_priv;
 
@@ -704,7 +704,7 @@ int set_ipv6_toggle(int toggle)
 	return 0;
 }
 
-int set_dscp_toggle(int toggle)
+static int set_dscp_toggle(int toggle)
 {
 	struct mtk_hnat *h = hnat_priv;
 
@@ -721,7 +721,7 @@ int set_dscp_toggle(int toggle)
 	return 0;
 }
 
-int bind_rate_setting(int bind_rate)
+static int bind_rate_setting(int bind_rate)
 {
 	int i;
 
@@ -739,7 +739,7 @@ int bind_rate_setting(int bind_rate)
 	return 0;
 }
 
-int set_macvlan_support(int toggle)
+static int set_macvlan_support(int toggle)
 {
 	struct mtk_hnat *h = hnat_priv;
 
@@ -756,7 +756,7 @@ int set_macvlan_support(int toggle)
 	return 0;
 }
 
-void mtk_ppe_dev_hook(const char *name, int toggle)
+static void mtk_ppe_dev_hook(const char *name, int toggle)
 {
 	struct net_device *dev;
 	dev = dev_get_by_name(&init_net, name);
@@ -770,7 +770,7 @@ void mtk_ppe_dev_hook(const char *name, int toggle)
 	return;
 }
 
-int set_guest_toggle(int toggle)
+static int set_guest_toggle(int toggle)
 {
 	struct mtk_hnat *h = hnat_priv;
 
@@ -813,7 +813,7 @@ static const debugfs_write_func cr_set_func[] = {
 	[12] = set_macvlan_support,
 };
 
-int read_mib(struct mtk_hnat *h, u32 ppe_id,
+static int read_mib(struct mtk_hnat *h, u32 ppe_id,
 	     u32 index, u64 *bytes, u64 *packets)
 {
 	int ret;
@@ -1196,7 +1196,7 @@ static const struct file_operations hnat_whnat_fops = {
 	.release = single_release,
 };
 
-int cpu_reason_read(struct seq_file *m, void *private)
+static int cpu_reason_read(struct seq_file *m, void *private)
 {
 	int i;
 
@@ -1250,7 +1250,7 @@ static int cpu_reason_open(struct inode *inode, struct file *file)
 	return single_open(file, cpu_reason_read, file->private_data);
 }
 
-ssize_t cpu_reason_write(struct file *file, const char __user *buffer,
+static ssize_t cpu_reason_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *data)
 {
 	char buf[32];
@@ -1307,7 +1307,7 @@ static const struct file_operations cpu_reason_fops = {
 	.release = single_release,
 };
 
-void dbg_dump_entry(struct seq_file *m, struct foe_entry *entry,
+static void dbg_dump_entry(struct seq_file *m, struct foe_entry *entry,
 		    uint32_t index)
 {
 	__be32 saddr, daddr, nsaddr, ndaddr;
@@ -1399,7 +1399,7 @@ void dbg_dump_entry(struct seq_file *m, struct foe_entry *entry,
 	}
 }
 
-int __hnat_entry_read(struct seq_file *m, void *private, u32 ppe_id)
+static int __hnat_entry_read(struct seq_file *m, void *private, u32 ppe_id)
 {
 	struct mtk_hnat *h = hnat_priv;
 	struct foe_entry *entry, *end;
@@ -1460,7 +1460,7 @@ static int hnat_stats_read(struct seq_file *m, void *private)
 	return 0;
 }
 
-int hnat_entry_read(struct seq_file *m, void *private)
+static int hnat_entry_read(struct seq_file *m, void *private)
 {
 	int i;
 
@@ -1470,7 +1470,7 @@ int hnat_entry_read(struct seq_file *m, void *private)
 	return 0;
 }
 
-ssize_t hnat_entry_write(struct file *file, const char __user *buffer,
+static ssize_t hnat_entry_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *data)
 {
 	char buf[32];
@@ -1548,7 +1548,7 @@ static const struct file_operations hnat_stats_fops = {
 	.release = single_release,
 };
 
-int __hnat_setting_read(struct seq_file *m, void *private, u32 ppe_id)
+static int __hnat_setting_read(struct seq_file *m, void *private, u32 ppe_id)
 {
 	struct mtk_hnat *h = hnat_priv;
 	int i;
@@ -1570,7 +1570,7 @@ int __hnat_setting_read(struct seq_file *m, void *private, u32 ppe_id)
 	return 0;
 }
 
-int hnat_setting_read(struct seq_file *m, void *private)
+static int hnat_setting_read(struct seq_file *m, void *private)
 {
 	int i;
 
@@ -1585,7 +1585,7 @@ static int hnat_setting_open(struct inode *inode, struct file *file)
 	return single_open(file, hnat_setting_read, file->private_data);
 }
 
-ssize_t hnat_setting_write(struct file *file, const char __user *buffer,
+static ssize_t hnat_setting_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *data)
 {
 	char buf[32];
@@ -1653,7 +1653,7 @@ static const struct file_operations hnat_setting_fops = {
 	.release = single_release,
 };
 
-int __mcast_table_dump(struct seq_file *m, void *private, u32 ppe_id)
+static int __mcast_table_dump(struct seq_file *m, void *private, u32 ppe_id)
 {
 	struct mtk_hnat *h = hnat_priv;
 	struct ppe_mcast_h mcast_h;
@@ -1702,7 +1702,7 @@ int __mcast_table_dump(struct seq_file *m, void *private, u32 ppe_id)
 	return 0;
 }
 
-int mcast_table_dump(struct seq_file *m, void *private)
+static int mcast_table_dump(struct seq_file *m, void *private)
 {
 	int i;
 
@@ -1771,9 +1771,8 @@ static ssize_t hnat_ppd_if_write(struct file *file, const char __user *buffer,
 	dev = dev_get_by_name(&init_net, p);
 
 	if (dev) {
-		if (hnat_priv->g_ppdev)
-			dev_put(hnat_priv->g_ppdev);
-		hnat_priv->g_ppdev = dev;
+		hnat_replace_netdev(&hnat_priv->g_ppdev, dev);
+		dev_put(dev);
 
 		strncpy(hnat_priv->ppd, p, IFNAMSIZ - 1);
 		pr_info("hnat_priv ppd = %s\n", hnat_priv->ppd);

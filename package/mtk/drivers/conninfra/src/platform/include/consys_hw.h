@@ -230,6 +230,9 @@ int consys_hw_is_connsys_reg(phys_addr_t addr);
  */
 int consys_hw_is_bus_hang(void);
 int consys_hw_dump_bus_status(void);
+enum conn_dump_cpupcr_type;
+int consys_hw_dump_cpupcr(enum conn_dump_cpupcr_type dump_type, int times,
+			 unsigned long interval_us);
 
 int consys_hw_spi_read(enum sys_spi_subsystem subsystem, unsigned int addr, unsigned int *data);
 int consys_hw_spi_write(enum sys_spi_subsystem subsystem, unsigned int addr, unsigned int data);

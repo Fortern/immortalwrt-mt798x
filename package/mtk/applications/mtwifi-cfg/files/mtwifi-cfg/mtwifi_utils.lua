@@ -1,6 +1,7 @@
 #!/usr/bin/lua
 
 local mtwifi_utils = {}
+local nixio = require "nixio"
 
 local mtwifi_logfile = "/tmp/mtwifi.log"
 

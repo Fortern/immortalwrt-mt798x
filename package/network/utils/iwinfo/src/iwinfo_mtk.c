@@ -1,4 +1,5 @@
 #include <inttypes.h>
+#include <ctype.h>
 #include "iwinfo.h"
 #include "iwinfo_wext.h"
 #include "mtwifi.h"
@@ -11,12 +12,30 @@ static inline int mtk_ioctl(const char *ifname, int cmd, struct iwreq *wrq)
 	return iwinfo_ioctl(cmd, wrq);
 }
 
+static bool mtk_is_ifname(const char *name)
+{
+	if (!strncmp(name, "apcli", 5))
+		name += 5;
+	else if (!strncmp(name, "ra", 2))
+		name += 2;
+	else
+		return false;
+	if (*name && strchr("xiyez", *name))
+		name++;
+	if (!isdigit((unsigned char)*name))
+		return false;
+	while (isdigit((unsigned char)*name))
+		name++;
+	return !*name;
+}
+
 static const char *mtk_dev2phy(const char *devname)
 {
+	static char result[IFNAMSIZ];
 	const char *phy = NULL;
 	struct uci_section *s;
 
-	if (strstr(devname,"ra") || strstr(devname,"apcli"))
+	if (mtk_is_ifname(devname))
 		return devname;
 
 	s = iwinfo_uci_get_radio(devname, "mtwifi");
@@ -24,6 +43,10 @@ static const char *mtk_dev2phy(const char *devname)
 		goto out;
 	
 	phy = uci_lookup_option_string(uci_ctx, s, "phy");
+	if (phy) {
+		snprintf(result, sizeof(result), "%s", phy);
+		phy = result;
+	}
 
 out:
 	iwinfo_uci_free();
@@ -35,7 +58,7 @@ static int mtk_probe(const char *dev)
 	const char *phy = NULL;
 	struct uci_section *s;
 
-	if (strstr(dev,"ra") || strstr(dev,"apcli"))
+	if (mtk_is_ifname(dev))
 		return true;
 
 	s = iwinfo_uci_get_radio(dev, "mtwifi");
@@ -164,7 +187,7 @@ static int mtk_get_bitrate(const char *dev, int *buf)
 
 	if(mtk_ioctl(ifname, SIOCGIWRATE, &wrq) >= 0)
 	{
-		*buf = (wrq.u.bitrate.value / 1000);
+		*buf = ((uint32_t)wrq.u.bitrate.value / 1000);
 		return 0;
 	}
 
@@ -825,7 +848,7 @@ static int mtk_get_hwmodelist(const char *dev, int *buf)
 	char chans[IWINFO_BUFSIZE] = { 0 };
 	struct iwinfo_freqlist_entry *e = NULL;
 	struct uci_section *s;
-	const char* band = NULL;
+	char band[8] = { 0 };
 	int len = 0;
 
 	*buf = 0;
@@ -835,12 +858,14 @@ static int mtk_get_hwmodelist(const char *dev, int *buf)
 	if (!s)
 		goto uciout;
 	
-	band = uci_lookup_option_string(uci_ctx, s, "band");
+	const char *value = uci_lookup_option_string(uci_ctx, s, "band");
+	if (value)
+		snprintf(band, sizeof(band), "%s", value);
 
 uciout:
 	iwinfo_uci_free();
 
-	if (band) {
+	if (band[0]) {
 		if (!strcmp(band,"2g"))
 			*buf = (IWINFO_80211_N | IWINFO_80211_AX);
 		else if (!strcmp(band,"5g"))
@@ -879,7 +904,7 @@ static int mtk_get_htmodelist(const char *dev, int *buf)
 	char chans[IWINFO_BUFSIZE] = { 0 };
 	struct iwinfo_freqlist_entry *e = NULL;
 	struct uci_section *s;
-	const char* band = NULL;
+	char band[8] = { 0 };
 	int len = 0;
 
 	*buf = 0;
@@ -889,12 +914,14 @@ static int mtk_get_htmodelist(const char *dev, int *buf)
 	if (!s)
 		goto uciout;
 	
-	band = uci_lookup_option_string(uci_ctx, s, "band");
+	const char *value = uci_lookup_option_string(uci_ctx, s, "band");
+	if (value)
+		snprintf(band, sizeof(band), "%s", value);
 
 uciout:
 	iwinfo_uci_free();
 
-	if (band) {
+	if (band[0]) {
 		if (!strcmp(band,"2g"))
 			*buf = (IWINFO_HTMODE_HT20 | IWINFO_HTMODE_HT40 | IWINFO_HTMODE_HE20 | IWINFO_HTMODE_HE40);
 		else if (!strcmp(band,"5g"))
